@@ -1,8 +1,22 @@
+/** @typedef {import('eslint').ESLint} ESLint */
+/** @typedef {import('eslint').ESLint.Formatter} Formatter */
+/** @typedef {import('eslint').ESLint.LintResult} LintResult */
+/** @typedef {import('webpack').Compiler} Compiler */
+/** @typedef {import('webpack').Compilation} Compilation */
+/** @typedef {import('webpack-sources').Source} Source */
+/** @typedef {import('./options').Options} Options */
+/** @typedef {import('./options').FormatterFunction} FormatterFunction */
+/** @typedef {(compilation: Compilation) => Promise<void>} GenerateReport */
+/** @typedef {{errors?: ESLintError, warnings?: ESLintError, generateReportAsset?: GenerateReport}} Report */
+/** @typedef {() => Promise<Report>} Reporter */
+/** @typedef {(files: string|string[]) => void} Linter */
+/** @typedef {(filesChanged: string[]) => void} InvalidateLinterCache */
+/** @typedef {{[files: string]: LintResult}} LintResultMap */
 /**
  * @param {string|undefined} key
  * @param {Options} options
  * @param {Compilation} compilation
- * @returns {{lint: Linter, report: Reporter}}
+ * @returns {{lint: Linter, report: Reporter, invalidateLinterCache: InvalidateLinterCache}}
  */
 export default function linter(
   key: string | undefined,
@@ -11,6 +25,7 @@ export default function linter(
 ): {
   lint: Linter;
   report: Reporter;
+  invalidateLinterCache: InvalidateLinterCache;
 };
 export type ESLint = import('eslint').ESLint;
 export type Formatter = import('eslint').ESLint.Formatter;
@@ -32,6 +47,7 @@ export type Report = {
 };
 export type Reporter = () => Promise<Report>;
 export type Linter = (files: string | string[]) => void;
+export type InvalidateLinterCache = (filesChanged: string[]) => void;
 export type LintResultMap = {
   [files: string]: import('eslint').ESLint.LintResult;
 };

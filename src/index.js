@@ -87,9 +87,15 @@ class ESLintWebpackPlugin {
       let lint;
       /** @type {import('./linter').Reporter} */
       let report;
+      /** @type {import('./linter').InvalidateLinterCache} */
+      let invalidateLinterCache;
 
       try {
-        ({ lint, report } = linter(this.key, options, compilation));
+        ({ lint, report, invalidateLinterCache } = linter(
+          this.key,
+          options,
+          compilation
+        ));
       } catch (e) {
         compilation.errors.push(e);
         return;
@@ -97,6 +103,13 @@ class ESLintWebpackPlugin {
 
       // Gather Files to lint
       compilation.hooks.finishModules.tap(ESLINT_PLUGIN, (modules) => {
+        /** @type {string[]} */
+        const filesChanged = [];
+        if (compiler.modifiedFiles)
+          filesChanged.push(...compiler.modifiedFiles);
+        if (compiler.removedFiles) filesChanged.push(...compiler.removedFiles);
+        invalidateLinterCache(filesChanged);
+
         /** @type {string[]} */
         const files = [];
 

@@ -3,6 +3,9 @@ import { dirname, isAbsolute, join } from 'path';
 import ESLintError from './ESLintError';
 import getESLint from './getESLint';
 
+/** @type {Map<string, LintResult>} */
+const linterCache = new Map();
+
 /** @typedef {import('eslint').ESLint} ESLint */
 /** @typedef {import('eslint').ESLint.Formatter} Formatter */
 /** @typedef {import('eslint').ESLint.LintResult} LintResult */
@@ -15,13 +18,14 @@ import getESLint from './getESLint';
 /** @typedef {{errors?: ESLintError, warnings?: ESLintError, generateReportAsset?: GenerateReport}} Report */
 /** @typedef {() => Promise<Report>} Reporter */
 /** @typedef {(files: string|string[]) => void} Linter */
+/** @typedef {(filesChanged: string[]) => void} InvalidateLinterCache */
 /** @typedef {{[files: string]: LintResult}} LintResultMap */
 
 /**
  * @param {string|undefined} key
  * @param {Options} options
  * @param {Compilation} compilation
- * @returns {{lint: Linter, report: Reporter}}
+ * @returns {{lint: Linter, report: Reporter, invalidateLinterCache: InvalidateLinterCache}}
  */
 export default function linter(key, options, compilation) {
   /** @type {ESLint} */
@@ -45,18 +49,42 @@ export default function linter(key, options, compilation) {
   return {
     lint,
     report,
+    invalidateLinterCache,
   };
 
   /**
    * @param {string | string[]} files
    */
   function lint(files) {
-    rawResults.push(
-      lintFiles(files).catch((e) => {
-        compilation.errors.push(e);
-        return [];
-      })
-    );
+    if (!(files instanceof Array)) files = [...files];
+
+    /** @type {string[]} */
+    const filesToLint = [];
+
+    /** @type {LintResult[]} */
+    const cacheResults = [];
+
+    for (const file of files) {
+      const cacheResult = linterCache.get(file);
+      if (cacheResult) cacheResults.push(cacheResult);
+      else filesToLint.push(file);
+    }
+
+    const resultsPromise = new Promise((resolve) => {
+      lintFiles(filesToLint)
+        .then((lintResults) => {
+          // add lintResults to cache
+          for (const lintResult of lintResults)
+            linterCache.set(lintResult.filePath, lintResult);
+          resolve([...lintResults, ...cacheResults]);
+        })
+        .catch((e) => {
+          compilation.errors.push(e);
+          return [];
+        });
+    });
+
+    rawResults.push(resultsPromise);
   }
 
   async function report() {
@@ -127,6 +155,16 @@ export default function linter(key, options, compilation) {
       }
 
       await save(filePath, content);
+    }
+  }
+
+  /**
+   * @param {string[]} filesChanged
+   */
+  function invalidateLinterCache(filesChanged) {
+    // remove modified files
+    for (const fileChanged of filesChanged) {
+      linterCache.delete(fileChanged);
     }
   }
 }
