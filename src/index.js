@@ -82,13 +82,25 @@ class ESLintWebpackPlugin {
     const wanted = parseFoldersToGlobs(options.files, options.extensions);
     const exclude = parseFoldersToGlobs(options.exclude, []);
 
+    /** @type {import('./linter').InvalidateLinterCache} */
+    let invalidateLinterCache;
+
+    compiler.hooks.invalid.tap(ESLINT_PLUGIN, (invalidFile) => {
+      if (!invalidateLinterCache) return;
+
+      /** @type {string[]} */
+      const invalidFiles = [];
+      if (invalidFile) invalidFiles.push(invalidFile);
+      if (compiler.modifiedFiles) invalidFiles.push(...compiler.modifiedFiles);
+      if (compiler.removedFiles) invalidFiles.push(...compiler.removedFiles);
+      invalidateLinterCache(invalidFiles);
+    });
+
     compiler.hooks.thisCompilation.tap(ESLINT_PLUGIN, (compilation) => {
       /** @type {import('./linter').Linter} */
       let lint;
       /** @type {import('./linter').Reporter} */
       let report;
-      /** @type {import('./linter').InvalidateLinterCache} */
-      let invalidateLinterCache;
 
       try {
         ({ lint, report, invalidateLinterCache } = linter(
@@ -103,13 +115,6 @@ class ESLintWebpackPlugin {
 
       // Gather Files to lint
       compilation.hooks.finishModules.tap(ESLINT_PLUGIN, (modules) => {
-        /** @type {string[]} */
-        const filesChanged = [];
-        if (compiler.modifiedFiles)
-          filesChanged.push(...compiler.modifiedFiles);
-        if (compiler.removedFiles) filesChanged.push(...compiler.removedFiles);
-        invalidateLinterCache(filesChanged);
-
         /** @type {string[]} */
         const files = [];
 
